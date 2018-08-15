@@ -14,6 +14,7 @@ import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
 import android.util.LruCache;
+import android.view.Window;
 import android.widget.AbsListView;
 import android.widget.ListView;
 
