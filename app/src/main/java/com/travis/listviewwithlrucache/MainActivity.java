@@ -14,6 +14,8 @@ import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
 import android.util.LruCache;
+import android.view.LayoutInflater;
+import android.view.View;
 import android.view.Window;
 import android.widget.AbsListView;
 import android.widget.ListView;
@@ -31,7 +33,7 @@ public class MainActivity extends AppCompatActivity implements AbsListView.OnScr
     private ListAdapter adapter;
 
     public int scrollFirstID;
-    public int scrollEdnID;
+    public int scrollEndID;
 
     private boolean isInit = false;
 
@@ -41,6 +43,13 @@ public class MainActivity extends AppCompatActivity implements AbsListView.OnScr
     public static final int INDEX_IMAGE_DISPLAY_NAME = 3;
 
     public static final int EXTERNAL_STORAGE_REQ_CODE = 15 ;
+
+    private View loadMoreView;
+    private LayoutInflater inflater;
+    private List<String> listSeg; // 分次加载用的list
+    private boolean isLoading = false;
+    private int totalListCount; // list中item的总数，随着分段的显示，total会变化
+    private final int LOAD_COUNT_ONCE = 10; // 每次加载的数量
 
     String[] projImage = {
             MediaStore.Images.Media._ID,
@@ -67,10 +76,32 @@ public class MainActivity extends AppCompatActivity implements AbsListView.OnScr
         initImagePath();
 
         LruCache<String, Bitmap> memoryCache = getCache();
+
+        inflater = LayoutInflater.from(this);
+        loadMoreView = inflater.inflate(R.layout.load_more, null);
+        //loadMoreView.setVisibility(View.VISIBLE);
+
+        listSeg = new ArrayList<String>();
+        updateListSeg();
+
         listView = (ListView)findViewById(R.id.list);
         listView.setOnScrollListener(this);
-        adapter = new ListAdapter(this,list, listView, memoryCache);
+        listView.addFooterView(loadMoreView,null, false);
+
+        adapter = new ListAdapter(this, listSeg, listView, memoryCache);
         listView.setAdapter(adapter);
+    }
+
+    /**
+     * 更新分次加载的list
+     */
+    private void updateListSeg() {
+        int j = 0;
+        int segSize =  listSeg.size();
+
+        for (int i = segSize; j < LOAD_COUNT_ONCE && i < list.size(); i++,j++){
+            listSeg.add(list.get(i));
+        }
     }
 
     /**
@@ -116,12 +147,28 @@ public class MainActivity extends AppCompatActivity implements AbsListView.OnScr
         cursor.close();
     }
 
+    private void loadImage(){
+        if (scrollEndID == list.size()) { // 最后一页，scrollEndID应该减一，并且应该移除footerView
+            scrollEndID--;
+            listView.removeFooterView(loadMoreView);
+        }
+        // 不到最后一页的时候，scrollEndID不用减一，这样可以加载下一页的一个item
+        for (int i = scrollFirstID; i <= scrollEndID; i++){
+            adapter.loadeImage(i);
+        }
+    }
+
     @Override
     public void onScrollStateChanged(AbsListView absListView, int scrollState) {
 
         if (scrollState == SCROLL_STATE_IDLE){
-            for (int i = scrollFirstID; i < scrollEdnID; i++){
-                adapter.loadeImage(i);
+            if (scrollEndID == totalListCount){
+                if (!isLoading){
+                    isLoading = true;
+                    onLoad();
+                }
+            }else {
+                loadImage();
             }
         }else {
             adapter.cancelTask();
@@ -132,17 +179,46 @@ public class MainActivity extends AppCompatActivity implements AbsListView.OnScr
     public void onScroll(AbsListView absListView,
                          int firstVisibleItem, int visibleItemCount, int totalItemCount) {
 
+        int footerViewCount = listView.getFooterViewsCount(); // item总数不包含footerView的个数
+
         scrollFirstID = firstVisibleItem;
-        scrollEdnID = scrollFirstID +visibleItemCount;
+        scrollEndID = scrollFirstID +visibleItemCount - footerViewCount;
+
+        totalListCount = totalItemCount - footerViewCount;
 
         if (!isInit && totalItemCount > 0){
-            for (int i = scrollFirstID; i < scrollEdnID; i++){
-                adapter.loadeImage(i);
-            }
+            loadImage();
             isInit = true;
         }
     }
 
+    private void onLoad() {
+        try {
+            Thread.sleep(1000); // 模拟耗时
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+
+        updateListSeg();
+
+        if (adapter == null){
+            adapter = new ListAdapter(this, listSeg, listView, getCache());
+            listView.setAdapter(adapter);
+        }else {
+            adapter.updateAdapter(listSeg);
+        }
+
+        loadComplete(); // 布局刷新结束
+    }
+
+    private void loadComplete() {
+        //loadMoreView.setVisibility(View.INVISIBLE);
+        isLoading = false;
+        invalidateOptionsMenu();
+
+        // 布局刷新结束后，加载数据
+        loadImage();
+    }
 
     @Override
     protected void onDestroy() {

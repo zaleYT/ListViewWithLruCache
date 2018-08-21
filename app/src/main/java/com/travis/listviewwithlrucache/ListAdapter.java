@@ -32,14 +32,14 @@ import java.util.zip.Inflater;
 
 public class ListAdapter extends BaseAdapter {
 
-    public static final String TAG = "ListAdapter";
+    private static final String TAG = "ListAdapter";
 
     private Context context;
     private List<String> list;
     private ListView listView;
 
     private LruCache<String, Bitmap> lruCache;
-    public Set<ImageAsyncTask> tasks;
+    private Set<ImageAsyncTask> tasks;
 
     public ListAdapter(Context context, List<String> list, ListView listView, LruCache<String, Bitmap> memoryCache) {
         this.context = context;
@@ -64,6 +64,13 @@ public class ListAdapter extends BaseAdapter {
     @Override
     public long getItemId(int i) {
         return i;
+    }
+
+    public void updateAdapter(List<String> listSeg){
+        //list.clear();
+        this.list = listSeg;
+        //notifyDataSetInvalidated(); // 注意这两个方法的区别
+        notifyDataSetChanged();
     }
 
     @Override
@@ -91,6 +98,8 @@ public class ListAdapter extends BaseAdapter {
         }
 
         final int index = i;
+
+        // shareElement效果
         holder.imageView.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View clickedView) {
